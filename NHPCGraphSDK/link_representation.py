@@ -72,7 +72,8 @@ class Link:
 
             all_keys = []
             for connected_words in reference.keys:
-                all_keys.extend(connected_words)
+                if connected_words:
+                    all_keys.extend(connected_words)
             all_keys = list(set(all_keys))
             for connected_words in all_keys:
                 if connected_words in reference_dict:
@@ -82,8 +83,9 @@ class Link:
                 reference_dict[connected_words] = text_reference
 
             for connected_words in reference.keys:
-                text_references = [reference_dict.get(connected_word) for connected_word in connected_words]
-                references.extend(text_references)
+                if connected_words:
+                    text_references = [reference_dict.get(connected_word) for connected_word in connected_words]
+                    references.extend(text_references)
         return references
 
 
