@@ -49,7 +49,7 @@ class Graph:
             add_node_id(link_obj['source'], link)
             add_node_id(link_obj['target'], link)
         for node_id, node_obj in graph_obj['nodes'].items():
-            node = Node.load_node(node_obj, link_ids=nodes_id_map.get(node_id, []))
+            node = Node.from_object(node_obj, link_ids=nodes_id_map.get(node_id, []))
             self.__nodes__.append(node)
             self.__nodes_id_map__[node_id] = node_obj
 

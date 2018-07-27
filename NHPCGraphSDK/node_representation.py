@@ -19,31 +19,38 @@ class NodeAttribute:
 
 
 # to make the class inherently json serializable, it was inheritted from dict class
-class Node(dict):
+class Node:
     __id__ = None
     __immutable__ = None
     __count__ = None
-    __group__ = None
-    __n_name__ = None
+    __node_name__ = None
+
     __document_ids__ = None
     __inward_reference__ = None
     __outward_reference__ = None
     __attributes__ = None
-    __links_id__ = None
+    __proper_noun__ = None
 
-    def __init__(self, name, id, document_id, link_ids, attributes=None, count=1, inward_reference=1,
-                 outward_reference=1, immutable=False):
-        # initialize an empty list for document_id(s)
-        self.__document_ids__ = []
-        self.count = count
-        self.id = id
-        self.name = name
-        self.inward_reference = inward_reference
-        self.outward_reference = outward_reference
-        self.document_ids = document_id
-        self['paper_id'] = self.document_ids
-        self.attributes = attributes
-        self.immutable = immutable
+    # Not to be serialized
+    __unique_attributes__ = None
+
+    def __init__(self, name=None, node_id=None, document_ids=None, attributes=None, count=1, inward_reference=1,
+                 outward_reference=1, immutable=False, proper_noun=None, document_id=None, link_ids=None):
+        self.__id__ = node_id
+        self.__count__ = count
+        self.__node_name__ = name
+        self.__group__ = name
+        self.__document_ids__ = document_ids or []
+        if document_id:
+            self.__document_ids__.append(document_id)
+
+        self.__inward_reference__ = inward_reference
+        self.__outward_reference__ = outward_reference
+        self.__immutable__ = immutable
+
+        self.__proper_noun__ = proper_noun
+        self.__attributes__ = attributes or []
+        self.__unique_attributes__ = set()
         self.__links_id__ = link_ids
 
     @property
@@ -51,9 +58,8 @@ class Node(dict):
         return self.__id__
 
     @id.setter
-    def id(self, value):
-        self.__id__ = value
-        self['id'] = value
+    def id(self, new_id):
+        self.__id__ = new_id
 
     @property
     def immutable(self):
@@ -61,52 +67,37 @@ class Node(dict):
 
     @immutable.setter
     def immutable(self, value):
+        assert isinstance(value, bool), "Immutable value should be a boolean."
         self.__immutable__ = value
 
     @property
     def count(self):
         return self.__count__
 
-    @count.setter
-    def count(self, value):
-        self.__count__ = value
-        self['count'] = value
+    def increment_count(self, value=1):
+        self.__count__ += 1
 
     @property
     def name(self):
-        return self.__n_name__
-
-    @name.setter
-    def name(self, value):
-        self.__n_name__ = value
-        self['name'] = value
+        return self.__node_name__
 
     @property
     def document_ids(self):
         return self.__document_ids__
 
-    @document_ids.setter
-    def document_ids(self, value):
-        if value not in self.__document_ids__:
-            self.__document_ids__.append(value)
-
     @property
     def inward_reference(self):
         return self.__inward_reference__
 
-    @inward_reference.setter
-    def inward_reference(self, value):
-        self.__inward_reference__ = value
-        self['inward_reference'] = value
+    def increment_inward_reference(self, value=1):
+        self.__inward_reference__ += value
 
     @property
     def outward_reference(self):
         return self.__outward_reference__
 
-    @outward_reference.setter
-    def outward_reference(self, value):
-        self.__outward_reference__ = value
-        self['outward_reference'] = value
+    def increment_outward_reference(self, value=1):
+        self.__outward_reference__ += value
 
     @property
     def attributes(self):
@@ -115,35 +106,35 @@ class Node(dict):
     @attributes.setter
     def attributes(self, value):
         self.__attributes__ = value
-        self['attributes'] = value
 
-    def has_attribute(self, attribute_name):
-        for attr in self.__attributes__:
-            if attribute_name in (attr['at'] or {}):
-                return True
-        return False
+    def add_attribute(self, attribute):
+        add = self.__unique_attributes__.add
+        if len(self.__unique_attributes__) == 0:
+            [add(json.dumps(_attribute)) for _attribute in self.attributes]
+        hash = json.dumps(attribute)
+        if hash not in self.__unique_attributes__:
+            self.__attributes__.append(attribute)
+            self.__unique_attributes__.add(hash)
 
-    def is_group_type(self, group_name):
-        for attr in self.__attributes__:
-            if attr['et'].lower() == group_name:
-                return True
-        return False
-
-    def get_attributes(self) -> NodeAttribute:
-        for attr in self.__attributes__:
-            yield NodeAttribute(group_name=attr['et'], properties=attr['at'])
+    @property
+    def proper_noun(self):
+        return self.__proper_noun__
 
     @staticmethod
-    def load_node(node_obj, link_ids):
-        paper_ids = node_obj.pop('paper_id')
-        node = None
-        for paper_id in paper_ids:
-            if node is None:
-                node_obj['document_id'] = paper_id
-                node = Node(**node_obj, link_ids=link_ids)
-            else:
-                node.document_ids = paper_id
-        return node
+    def from_object(obj, link_ids) -> 'Node':
+        id = obj.pop('id')
+        return Node(node_id=id, link_ids=link_ids, **obj)
+
+    def to_object(self):
+        return {'name': self.name, 'node_id': self.id, 'document_ids': self.document_ids, 'attributes': self.attributes,
+                'count': self.count, 'inward_reference': self.inward_reference,
+                'outward_reference': self.outward_reference, 'immutable': self.immutable,
+                'proper_noun': self.proper_noun}
+
+    def to_object_with_priority(self):
+        obj = self.to_object()
+        obj['id'] = obj.pop('node_id')
+        return obj
 
     def get_references(self, api_loader):
         references = []
@@ -155,3 +146,14 @@ class Node(dict):
         return json.dumps({'id': self.id, 'name': self.name, 'paper_id': self.document_ids, 'count': self.count,
                            'inward_reference': self.inward_reference, 'outward_reference': self.outward_reference,
                            'attributes': self.attributes})
+
+    def has_attribute(self, attribute_name):
+        for attr in self.__attributes__:
+            if attribute_name in (attr['at'] or {}):
+                return True
+        return False
+
+    def get_attributes(self) -> NodeAttribute:
+        for attr in self.__attributes__:
+            yield NodeAttribute(group_name=attr['et'], properties=attr['at'])
+
